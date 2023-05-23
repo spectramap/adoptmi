@@ -1,8 +1,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import scipy 
-from scipy.linalg import lstsq
+import scipy.linalg as ln 
 from skimage.restoration import unwrap_phase
+import aotools as ao
+from scipy.optimize import least_squares
 
 def crop_radial_image(phi, D):
     """narrow the pupil diameter of the DPP to the pupil diameter of the Raman microscope"""
@@ -12,7 +14,7 @@ def crop_radial_image(phi, D):
     return phi_new
 
 # create a pupil function
-def create_pupil(size_mesh, D):
+def create_pupil(size_mesh):
     """
     Create a pupil function.
     Parameters
@@ -30,26 +32,10 @@ def create_pupil(size_mesh, D):
     pupil_function : 2D array
         Pupil function.
     """
-    x = np.linspace(-D/2, D/2, size_mesh)
-    y = np.linspace(-D/2, D/2, size_mesh)
+    x = np.linspace(-size_mesh/2, size_mesh/2, size_mesh)
+    y = np.linspace(-size_mesh/2, size_mesh/2, size_mesh)
     kx, ky = np.meshgrid(x, y)
-    return kx**2 + ky**2 < (D/2)**2
-
-#unwrap phase from an image
-def unwrap_phase(image):
-    """
-    Unwrap phase from an image.
-    Parameters
-    ----------
-    image : 2D array
-        Image with wrapped phase.
-    Returns
-    -------
-    unwrapped_phase : 2D array
-        Image with unwrapped phase.
-    """
-    unwrapped_phase = np.unwrap(np.unwrap(image, axis=0), axis=1)
-    return unwrapped_phase
+    return kx**2 + ky**2 < (size_mesh/2)**2
 
 #create a 2d angular matrix
 def angular_matrix(mesh_size):
@@ -199,7 +185,13 @@ def osa2noll(osa_index):
     n, m = osa2index(osa_index)
     return index2noll(n, m)
 
-def norm(image, upper, lower):
+def substract_mean(image):
+    domain = create_pupil(image.shape[0])
+    new_image = image.copy()
+    new_image[domain] = new_image[domain] - np.sum(new_image[domain])/new_image[domain].shape[0]
+    return new_image
+    
+def norm(image):
     """
     Extend the domain of an image.
     Parameters
@@ -213,9 +205,10 @@ def norm(image, upper, lower):
     extended_image : 2D array
         Image with extended domain.
     """
-    extended_image = image.copy()
-    tmp = extended_image - extended_image.min()
-    extended_image = tmp/tmp.max()*2 - 1
+    domain = create_pupil(image.shape[0])
+    extended_image = image.copy()*domain
+    extended_image[domain] = extended_image[domain] - extended_image[domain].min()
+    extended_image[domain] = extended_image[domain]/extended_image[domain].max()*2 - 1
     return extended_image
 
 # create an unit circle zernike polynomial
@@ -256,9 +249,12 @@ def zernike(n, m, r, theta, mask=None):
         zernike = zernike*np.sqrt(n+1)
     return zernike
 
+def unwrap(phase):
+    return norm(unwrap_phase(phase))*np.pi*create_pupil(phase.shape[0])
+    
 def zernike_index(order, size, index="OSA"):
     """
-    Generate a zernike polynomial.
+    Generate a circular limited zernike polynomial.
     Parameters
     ----------
     order : int
@@ -283,16 +279,16 @@ def zernike_index(order, size, index="OSA"):
     r = radial_matrix(size)
     angular = angular_matrix(size)
     rho = r/r.max()
-    return zernike(n, m, rho, angular)
+    return norm(zernike(n, m, rho, angular))
 
-def zernikes(beam, J, index="OSA"):
+def zernikes(phase, J:list, index="OSA", plot = False):
     """
     Decompose an image into zernike coefficients.
     Parameters
     ----------
-    beam : object
+    beam : array
         phase to decompose.
-    J : int
+    J : list
         zernike coefficients.
     index : str
         Indexing of the zernike polynomials.
@@ -301,24 +297,31 @@ def zernikes(beam, J, index="OSA"):
     zernike : list
         Zernike coefficients.
     """
-    s = beam.phase.shape[0]
-    G = np.zeros((len(J), s*s))
-    D = np.zeros((len(J), s, s))
+    pupil = create_pupil(phase.shape[0])
+    s = pupil[pupil[:,:] == True].shape[0]    
+    G = np.zeros((len(J), s))
+    
+    #phase_zero = phase - 2
     for j in range(len(J)):
-        D[j,:,:] = norm(zernike_index(J[j], s, index=index), 1, 1) * beam.beam
-        for j in range(len(J)):
-            G[j,:] = D[j,:,:].flatten()
-    phase_flat = beam.phase.flatten()
-    coefficients, _, _, _ = lstsq(G.T, phase_flat)
+        #G[j,:] = zernike_index(J[j], unwrapped_phi.shape[0], index='OSA')[pupil]
+        G[j,:] = ao.zernike_noll(J[j], phase.shape[0])[pupil]
+    
+    phase_flat = phase[pupil]
+    inv = ln.inv(np.dot(G, G.T))
+    coeff = np.dot(inv, G)
+    coefficients = np.dot(coeff, phase_flat)
+    if plot == True:
+        plt.figure(), plt.bar(J, coefficients, width=0.8)
+        plt.xlabel(index)
     return coefficients
 
 def zernike_multi(orders, coefficients, N, index="OSA"):
     out_arr = np.zeros((N, N))
     for count in range(len(orders)):
         phase = zernike_index(orders[count], N, index)
-        phase = norm(phase, 1, -1)
+        phase = norm(phase)
         out_arr += coefficients[count]*phase
-    return out_arr
+    return out_arr*create_pupil(N)
     
 class AO:
     def __init__(self, name, wave, D, size_mesh):
