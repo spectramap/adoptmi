@@ -184,12 +184,6 @@ def osa2noll(osa_index):
     """
     n, m = osa2index(osa_index)
     return index2noll(n, m)
-
-def substract_mean(image):
-    domain = create_pupil(image.shape[0])
-    new_image = image.copy()
-    new_image[domain] = new_image[domain] - np.sum(new_image[domain])/new_image[domain].shape[0]
-    return new_image
     
 def norm(image):
     """
