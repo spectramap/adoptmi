@@ -3,7 +3,7 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "AO_juan"
+name = "adoptmi"
 version = "0.0.1"
 authors = [
 { name = "Juan David Munoz Bolanos", email = "jmunozbolanos@gmail.com"},
@@ -20,4 +20,4 @@ classifiers = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/spectramap/spectramap"
+"Homepage" = "https://github.com/spectramap/spectramap/adoptmi"
