@@ -1,8 +1,19 @@
 from src.AO_juan.AO import*
-
 import numpy as np
 import matplotlib.pyplot as plt
-import aotools as ao
+
+def crop_phases_to_smaller_pupil(pupil_dia, phi):
+    """narrow the pupil diameter of the DPP to the pupil diameter of the Raman microscope"""
+    pupil_DPP = 10e-3 #pupil diameter of the DPP
+    ux = pupil_DPP/phi.shape[1] #pixel size 
+    delta = (pupil_DPP - pupil_dia)/2/ux
+    phi_new = phi[:, round(delta):-round(delta),round(delta):-round(delta)]
+    pupil_Olympus = create_pupil(phi_new.shape[1])
+    
+    phi_new *= pupil_Olympus
+    #MW = sum(phi_new, axis = (1,2))/sum(pupil_Olympus) #removoing mean values
+    #phi_new -= MW[:,newaxis,newaxis]
+    return phi_new 
 
 def create_new_control_matrix(Zernikes, phi_new):
     """calculates the new control matrix"""
@@ -43,49 +54,21 @@ def generate_phase_from_control_matrix(B, sort_idx):
 
 
 plt.ion()
-path = "C:\\Users\\q125jm\\Documents\\Python Scripts\\Influence_matrix.npy"
+path = "C:\\Users\\q125jm\\Documents\\Python Scripts\\raw_abs.npy"
 full_inf_matrix = np.load(path)
 
-inf_matrix = full_inf_matrix[:, 3, :,:]
+raw = full_inf_matrix[:, 3, :,:]
 
 ##
 dia_DPP = 10e-3 #pupil diameter of the DPP
 dia_raman = 9e-3 #pupil diameter of the Raman microscope
 
 phi_new = np.zeros((63, 90, 90))
+
 for i in range(63):
-    phi_new[i,:,:] = crop_phases_to_smaller_pupil(dia_DPP, dia_raman, inf_matrix[i,:,:])
+    phi_new[i,:,:] = crop_phases_to_smaller_pupil(dia_DPP, dia_raman, raw[i,:,:])
 
 Zernikes = generate_zernikes(phi_new.shape[1], 93) #calculating Zernikes for the new pupil diameter
 B_new = create_new_control_matrix(Zernikes, phi_new)
 
 path_trial = "C:\\Users\\q125jm\\Documents\\Raman\\InfMat.mat"
-
-#read matlab influence matrix
-def read_matlab_influence_matrix(path):
-    import scipy.io as sio
-    mat_contents = sio.loadmat(path)
-    inf_matrix = mat_contents['Influence_mat']
-    return inf_matrix
-
-inf_matrix_pou = read_matlab_influence_matrix(path_trial)
-
-phi_single = generate_phase_from_control_matrix(inf_matrix_alex, np.arange(1,64))
-
-plt.figure(), plt.imshow(phi_single[7,:,:])
-
-###
-import numpy as np
-import matplotlib.pyplot as plt
-from src.AO_juan.AO import*
-import aotools as ao
-
-plt.ion()
-
-
-reference = ao.zernike_noll(4, 64)
-manual = zernike_index(4, 64, index = 'Noll')
-
-show(reference-manual)
-show(manual)
-show(reference)

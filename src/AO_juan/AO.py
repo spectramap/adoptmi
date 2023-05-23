@@ -295,7 +295,7 @@ def norm(image):
     return extended_image
 
 # create an unit circle zernike polynomial
-def zernike(n, m, r, theta):
+def zernike(n, m, r, theta, norm="Noll"):
     """
     Create a normalized Zernike polynomials.
     Parameters
@@ -315,6 +315,8 @@ def zernike(n, m, r, theta):
     zernike : 2D array
         Zernike polynomial.
     """
+    if norm != "Noll":
+        return 0
     N = r.shape[0]
     zernike = np.zeros_like(r)
     if m > 0:
@@ -334,7 +336,7 @@ def zernike(n, m, r, theta):
 def unwrap(phase):
     return unwrap_phase(phase)
     
-def zernike_index(order, size, index="OSA"):
+def zernike_index(order, size, index="OSA", norm="Noll"):
     """
     Generate a circular limited zernike polynomial.
     Parameters
@@ -356,12 +358,15 @@ def zernike_index(order, size, index="OSA"):
         n, m = noll2index(order)
     else:
         raise ValueError("Indexing must be either OSA or Noll")
-
+    
+    if norm != "Noll":
+        return 0
+    
     #r is a radial matrix
     r = radial_matrix(size)
     angular = angular_matrix(size)
-    rho = r/r.max()
-    return zernike(n, m, rho, angular)
+    #rho = r/r.max()
+    return zernike(n, m, r, angular)
 
 def show(phase):
     plt.figure()
@@ -376,7 +381,7 @@ def show(phase):
         plt.imshow(phase)
         plt.colorbar()
         
-def zernikes(phase, J:list, index="OSA", plot = False):
+def zernike_decompose(phase, J:list, index="OSA", plot = False, norm = "Noll"):
     """
     Decompose an image into zernike coefficients.
     Parameters
@@ -392,6 +397,8 @@ def zernikes(phase, J:list, index="OSA", plot = False):
     zernike : list
         Zernike coefficients.
     """
+    if norm != "Noll":
+        return 0
     pupil = create_pupil(phase.shape[0])
     s = pupil[pupil[:,:] == True].shape[0]    
     G = np.zeros((len(J), s))
@@ -408,16 +415,19 @@ def zernikes(phase, J:list, index="OSA", plot = False):
 
     if plot == True:
         plt.figure(), plt.bar(J, coefficients, width=0.8)
-        plt.xlabel(index)
+        plt.xlabel(index), plt.ylabel(norm)
     return coefficients
 
-def zernike_multi(orders, coefficients, N, index="OSA"):
+def zernike_multi(orders, coefficients, N, index="OSA", norm = "Noll", plot = False):
+    if norm != "Noll":
+        return 0
     out_arr = np.zeros((N, N))
     for count in range(len(orders)):
         phase = zernike_index(orders[count], N, index)
-        phase = norm(phase)
         out_arr += coefficients[count]*phase
-    return out_arr*create_pupil(N)
+    if plot == True:
+        plt.figure(), plt.imshow(out_arr), plt.colorbar()
+    return out_arr
     
 class AO:
     def __init__(self, name, wave, D, size_mesh):
