@@ -75,12 +75,15 @@ phi_single = generate_phase_from_control_matrix(inf_matrix_alex, np.arange(1,64)
 plt.figure(), plt.imshow(phi_single[7,:,:])
 
 ###
+import matplotlib.pyplot as plt
+from src.AO_juan.AO import*
 
 plt.ion()
+import aotools as ao
+
 reference = ao.zernike_noll(4, 64)
 
-from src.AO_juan import AO
 
-manual = AO.zernike_index(4, 64, index = 'Noll')
+manual = zernike_index(4, 64, index = 'OSA')
 
-AO.show(manual)
+show(reference-manual)

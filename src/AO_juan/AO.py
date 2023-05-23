@@ -273,7 +273,7 @@ def zernike_index(order, size, index="OSA"):
     r = radial_matrix(size)
     angular = angular_matrix(size)
     rho = r/r.max()
-    return zernike(n, m, rho, angular)
+    return zernike(n, m, rho, angular)*create_pupil(size)
 
 def show(phase):
     plt.figure()
