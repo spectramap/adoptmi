@@ -1,4 +1,4 @@
-from AO import*
+from src.AO_juan.AO import*
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -78,3 +78,9 @@ plt.figure(), plt.imshow(phi_single[7,:,:])
 
 plt.ion()
 reference = ao.zernike_noll(4, 64)
+
+from src.AO_juan import AO
+
+manual = AO.zernike_index(4, 64, index = 'Noll')
+
+AO.show(manual)

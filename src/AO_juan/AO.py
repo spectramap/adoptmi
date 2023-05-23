@@ -279,9 +279,10 @@ def zernike_index(order, size, index="OSA"):
     r = radial_matrix(size)
     angular = angular_matrix(size)
     rho = r/r.max()
-    return norm(zernike(n, m, rho, angular))
+    return zernike(n, m, rho, angular)
 
 def show(phase):
+    plt.figure()
     if type(phase) == complex:
         plt.subplot(1, 2, 1)
         im1 = plt.imshow(phase)
@@ -424,3 +425,6 @@ class AO:
         elif kind == 'robust':
             self.phase = unwrap_phase(self.phase)
 
+
+reference = ao.zernike_noll(4, 64)
+manual = zernike_index(4, 64)
