@@ -315,6 +315,7 @@ def zernike(n, m, r, theta):
     zernike : 2D array
         Zernike polynomial.
     """
+    N = r.shape[0]
     zernike = np.zeros_like(r)
     if m > 0:
         for s in range(int((n - m) / 2) + 1):

@@ -77,13 +77,12 @@ plt.figure(), plt.imshow(phi_single[7,:,:])
 ###
 import matplotlib.pyplot as plt
 from src.AO_juan.AO import*
-
-plt.ion()
 import aotools as ao
 
+plt.ion()
+
+
 reference = ao.zernike_noll(4, 64)
-
-
 manual = zernike_index(4, 64, index = 'Noll')
 
 show(reference-manual)
