@@ -187,7 +187,7 @@ def osa2noll(osa_index):
     return index2noll(n, m)
 
 
-def circle(radius, size, circle_centre=(0, 0), origin="middle"):
+def new_circle(radius, size, circle_centre=(0, 0), origin="middle"):
     """
     Create a 2-D array: elements equal 1 within a circle and 0 outside.
 
@@ -228,7 +228,7 @@ def circle(radius, size, circle_centre=(0, 0), origin="middle"):
         ndarray (float64) : the circle array
     """
     # (2) Generate the output array:
-    C = numpy.zeros((size, size))
+    C = np.zeros((size, size))
 
     # (3.a) Generate the 1-D coordinates of the pixel's centres:
     # coords = numpy.linspace(-size/2.,size/2.,size) # Wrong!!:
@@ -241,18 +241,18 @@ def circle(radius, size, circle_centre=(0, 0), origin="middle"):
     # size = 5: coords = array([-2., -1.,  0.,  1.,  2.])
     # size = 6: coords = array([-2.5, -1.5, -0.5,  0.5,  1.5,  2.5])
 
-    coords = numpy.arange(0.5, size, 1.0)
+    coords = np.arange(0.5, size, 1.0)
     # size = 5: coords = [ 0.5  1.5  2.5  3.5  4.5]
     # size = 6: coords = [ 0.5  1.5  2.5  3.5  4.5  5.5]
 
     # (3.b) Just an internal sanity check:
     if len(coords) != size:
-        raise exceptions.Bug("len(coords) = {0}, ".format(len(coords)) +
+        raise exception.Bug("len(coords) = {0}, ".format(len(coords)) +
                              "size = {0}. They must be equal.".format(size) +
                              "\n           Debug the line \"coords = ...\".")
 
     # (3.c) Generate the 2-D coordinates of the pixel's centres:
-    x, y = numpy.meshgrid(coords, coords)
+    x, y = np.meshgrid(coords, coords)
 
     # (3.d) Move the circle origin to the middle of the grid, if required:
     if origin == "middle":
@@ -329,7 +329,7 @@ def zernike(n, m, r, theta):
         for s in range(int(n/2 + 1)):
             zernike += ((-1) ** s * scipy.special.binom(n - s, s) * scipy.special.binom(n - 2 * s, n / 2 - s) * r ** (n - 2 * s))
         zernike = zernike*np.sqrt(n+1)
-    return zernike*np.less_equal(r, 1.0)*circle(N/2., N)
+    return zernike*np.less_equal(r, 1.0)*new_circle(N/2., N)
 
 def unwrap(phase):
     return unwrap_phase(phase)

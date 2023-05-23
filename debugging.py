@@ -75,6 +75,7 @@ phi_single = generate_phase_from_control_matrix(inf_matrix_alex, np.arange(1,64)
 plt.figure(), plt.imshow(phi_single[7,:,:])
 
 ###
+import numpy as np
 import matplotlib.pyplot as plt
 from src.AO_juan.AO import*
 import aotools as ao
