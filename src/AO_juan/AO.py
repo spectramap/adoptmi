@@ -281,6 +281,18 @@ def zernike_index(order, size, index="OSA"):
     rho = r/r.max()
     return norm(zernike(n, m, rho, angular))
 
+def show(phase):
+    if type(phase) == complex:
+        plt.subplot(1, 2, 1)
+        im1 = plt.imshow(phase)
+        plt.colorbar(im1)
+        plt.subplot(1, 2, 2)
+        im2 = plt.imshow(phase)
+        plt.colorbar(im2)
+    else:
+        plt.imshow(phase)
+        plt.colorbar()
+        
 def zernikes(phase, J:list, index="OSA", plot = False):
     """
     Decompose an image into zernike coefficients.
@@ -310,6 +322,7 @@ def zernikes(phase, J:list, index="OSA", plot = False):
     inv = ln.inv(np.dot(G, G.T))
     coeff = np.dot(inv, G)
     coefficients = np.dot(coeff, phase_flat)
+
     if plot == True:
         plt.figure(), plt.bar(J, coefficients, width=0.8)
         plt.xlabel(index)

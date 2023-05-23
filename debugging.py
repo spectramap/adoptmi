@@ -74,7 +74,7 @@ phi_single = generate_phase_from_control_matrix(inf_matrix_alex, np.arange(1,64)
 
 plt.figure(), plt.imshow(phi_single[7,:,:])
 
-B_new.sum
+###
 
-path_alex = "D:\\Raman\9mm\\B_9mm.npy"
-inf_matrix_alex = np.load(path_alex)
+plt.ion()
+reference = ao.zernike_noll(4, 64)
