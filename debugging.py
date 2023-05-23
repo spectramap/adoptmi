@@ -84,6 +84,8 @@ import aotools as ao
 reference = ao.zernike_noll(4, 64)
 
 
-manual = zernike_index(4, 64, index = 'OSA')
+manual = zernike_index(4, 64, index = 'Noll')
 
 show(reference-manual)
+show(manual)
+show(reference)

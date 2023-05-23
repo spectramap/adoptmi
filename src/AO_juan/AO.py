@@ -50,9 +50,9 @@ def angular_matrix(mesh_size):
     angular_matrix : 2D array
         2D angular coordinate matrix.
     """
-    y, x = np.indices((mesh_size, mesh_size))
-    angular_matrix = np.arctan2(x - mesh_size / 2, y - mesh_size / 2)
-    angular_matrix = np.where(angular_matrix < 0, angular_matrix + 2 * np.pi, angular_matrix)
+    coords = (np.arange(mesh_size) - mesh_size / 2. + 0.5) / (mesh_size / 2.)
+    x, y = np.meshgrid(coords, coords)
+    angular_matrix = np.arctan2(y, x)
     return angular_matrix
 
 # create a 2d radial matrix
@@ -68,8 +68,9 @@ def radial_matrix(mesh_size):
     radial_matrix : 2D array
         2D radial matrix.
     """
-    y, x = np.indices((mesh_size, mesh_size))
-    radial_matrix = np.sqrt((x - mesh_size / 2) ** 2 + (y - mesh_size / 2) ** 2)
+    coords = (np.arange(mesh_size) - mesh_size / 2. + 0.5) / (mesh_size / 2.)
+    x, y = np.meshgrid(coords, coords)
+    radial_matrix = np.sqrt(x ** 2 + y ** 2)
     return radial_matrix
 
 # get noll index from m and n
@@ -184,7 +185,95 @@ def osa2noll(osa_index):
     """
     n, m = osa2index(osa_index)
     return index2noll(n, m)
-    
+
+
+def circle(radius, size, circle_centre=(0, 0), origin="middle"):
+    """
+    Create a 2-D array: elements equal 1 within a circle and 0 outside.
+
+    The default centre of the coordinate system is in the middle of the array:
+    circle_centre=(0,0), origin="middle"
+    This means:
+    if size is odd  : the centre is in the middle of the central pixel
+    if size is even : centre is in the corner where the central 4 pixels meet
+
+    origin = "corner" is used e.g. by psfAnalysis:radialAvg()
+
+    Examples: ::
+
+        circle(1,5) circle(0,5) circle(2,5) circle(0,4) circle(0.8,4) circle(2,4)
+          00000       00000       00100       0000        0000          0110
+          00100       00000       01110       0000        0110          1111
+          01110       00100       11111       0000        0110          1111
+          00100       00000       01110       0000        0000          0110
+          00000       00000       00100
+
+        circle(1,5,(0.5,0.5))   circle(1,4,(0.5,0.5))
+           .-->+
+           |  00000               0000
+           |  00000               0010
+          +V  00110               0111
+              00110               0010
+              00000
+
+    Parameters:
+        radius (float)       : radius of the circle
+        size (int)           : size of the 2-D array in which the circle lies
+        circle_centre (tuple): coords of the centre of the circle
+        origin (str)  : where is the origin of the coordinate system
+                               in which circle_centre is given;
+                               allowed values: {"middle", "corner"}
+
+    Returns:
+        ndarray (float64) : the circle array
+    """
+    # (2) Generate the output array:
+    C = numpy.zeros((size, size))
+
+    # (3.a) Generate the 1-D coordinates of the pixel's centres:
+    # coords = numpy.linspace(-size/2.,size/2.,size) # Wrong!!:
+    # size = 5: coords = array([-2.5 , -1.25,  0.  ,  1.25,  2.5 ])
+    # size = 6: coords = array([-3. , -1.8, -0.6,  0.6,  1.8,  3. ])
+    # (2015 Mar 30; delete this comment after Dec 2015 at the latest.)
+
+    # Before 2015 Apr 7 (delete 2015 Dec at the latest):
+    # coords = numpy.arange(-size/2.+0.5, size/2.-0.4, 1.0)
+    # size = 5: coords = array([-2., -1.,  0.,  1.,  2.])
+    # size = 6: coords = array([-2.5, -1.5, -0.5,  0.5,  1.5,  2.5])
+
+    coords = numpy.arange(0.5, size, 1.0)
+    # size = 5: coords = [ 0.5  1.5  2.5  3.5  4.5]
+    # size = 6: coords = [ 0.5  1.5  2.5  3.5  4.5  5.5]
+
+    # (3.b) Just an internal sanity check:
+    if len(coords) != size:
+        raise exceptions.Bug("len(coords) = {0}, ".format(len(coords)) +
+                             "size = {0}. They must be equal.".format(size) +
+                             "\n           Debug the line \"coords = ...\".")
+
+    # (3.c) Generate the 2-D coordinates of the pixel's centres:
+    x, y = numpy.meshgrid(coords, coords)
+
+    # (3.d) Move the circle origin to the middle of the grid, if required:
+    if origin == "middle":
+        x -= size / 2.
+        y -= size / 2.
+
+    # (3.e) Move the circle centre to the alternative position, if provided:
+    x -= circle_centre[0]
+    y -= circle_centre[1]
+
+    # (4) Calculate the output:
+    # if distance(pixel's centre, circle_centre) <= radius:
+    #     output = 1
+    # else:
+    #     output = 0
+    mask = x * x + y * y <= radius * radius
+    C[mask] = 1
+
+    # (5) Return:
+    return C
+
 def norm(image):
     """
     Extend the domain of an image.
@@ -206,7 +295,7 @@ def norm(image):
     return extended_image
 
 # create an unit circle zernike polynomial
-def zernike(n, m, r, theta, mask=None):
+def zernike(n, m, r, theta):
     """
     Create a normalized Zernike polynomials.
     Parameters
@@ -226,25 +315,23 @@ def zernike(n, m, r, theta, mask=None):
     zernike : 2D array
         Zernike polynomial.
     """
-    if mask is None:
-        mask = np.ones_like(r)
     zernike = np.zeros_like(r)
     if m > 0:
-        for s in range(int((n - abs(m)) / 2) + 1):
-            zernike += ((-1) ** s * scipy.special.binom(n - s, s) * scipy.special.binom(n - 2 * s, (n - abs(m)) / 2 - s) * r ** (n - 2 * s) * np.cos(m * theta) * mask)
+        for s in range(int((n - m) / 2) + 1):
+            zernike += ((-1) ** s * scipy.special.binom(n - s, s) * scipy.special.binom(n - 2 * s, (n - m) / 2 - s) * r ** (n - 2 * s) * np.cos(m * theta))
         zernike = zernike*np.sqrt(2*(n+1))
     elif m < 0:
         for s in range(int((n - abs(m)) / 2) + 1):
-            zernike += ((-1) ** s * scipy.special.binom(n - s, s) * scipy.special.binom(n - 2 * s, (n - abs(m)) / 2 - s) * r ** (n - 2 * s) * np.sin(np.abs(m) * theta * mask) * mask)
+            zernike += ((-1) ** s * scipy.special.binom(n - s, s) * scipy.special.binom(n - 2 * s, (n - abs(m)) / 2 - s) * r ** (n - 2 * s) * np.sin(np.abs(m) * theta ))
         zernike = zernike*np.sqrt(2*(n+1))
     else:
         for s in range(int(n/2 + 1)):
-            zernike += ((-1) ** s * scipy.special.binom(n - s, s) * scipy.special.binom(n - 2 * s, n / 2 - s) * r ** (n - 2 * s) * mask)
+            zernike += ((-1) ** s * scipy.special.binom(n - s, s) * scipy.special.binom(n - 2 * s, n / 2 - s) * r ** (n - 2 * s))
         zernike = zernike*np.sqrt(n+1)
-    return zernike
+    return zernike*np.less_equal(r, 1.0)*circle(N/2., N)
 
 def unwrap(phase):
-    return norm(unwrap_phase(phase))*np.pi*create_pupil(phase.shape[0])
+    return unwrap_phase(phase)
     
 def zernike_index(order, size, index="OSA"):
     """
@@ -273,7 +360,7 @@ def zernike_index(order, size, index="OSA"):
     r = radial_matrix(size)
     angular = angular_matrix(size)
     rho = r/r.max()
-    return zernike(n, m, rho, angular)*create_pupil(size)
+    return zernike(n, m, rho, angular)
 
 def show(phase):
     plt.figure()
