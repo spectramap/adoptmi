@@ -444,14 +444,11 @@ class AO:
     def get_beam(self):
         return self.beam
     
-    def zernikes(self, coefficients:list, index="OSA"):
-        return zernikes(self, coefficients, index=index)
+    def decompose(self, coefficients:list, index="OSA"):
+        return zernike_decompose(self, coefficients, index=index)
 
     def set_pupil(self, D):
-        x = np.linspace(-D/2, D/2, self.size_mesh)
-        y = np.linspace(-D/2, D/2, self.size_mesh)
-        X, Y = np.meshgrid(x, y)
-        pupil = X**2 + Y**2 < (D/2)**2
+        pupil = create_pupil(D)
         self.beam *= pupil
         self.phase *= pupil
 
@@ -461,13 +458,7 @@ class AO:
     
     #create a zernike polynomial
     def zernike(self, orders:list, coefficients:list, index="OSA"):
-        out_arr = np.zeros((self.size_mesh, self.size_mesh))
-        for count in range(len(orders)):
-            phase = zernike_index(orders[count], self.size_mesh, index)
-            phase = norm(phase, 1, -1)
-            out_arr += coefficients[count]*phase
-        self.phase = out_arr
-        self.set_pupil(self.D)
+        self.phase = zernike_multi(orders, coefficients, self.size_mesh, index=index)
 
     #show both phase and beam the same figure
     def show(self):
@@ -477,17 +468,14 @@ class AO:
         plt.subplot(1, 2, 2)
         im2 = plt.imshow(self.phase)
         plt.colorbar(im2)
-        plt.show()
 
     def show_beam(self):
         plt.imshow(self.beam)
         plt.colorbar()
-        plt.show()
 
     def show_phase(self):
         plt.imshow(self.phase)
         plt.colorbar()
-        plt.show()
 
     def set_phase(self, phase):
         self.phase = phase
@@ -518,5 +506,3 @@ class AO:
             self.phase = unwrap_phase(self.phase)
 
 
-reference = ao.zernike_noll(4, 64)
-manual = zernike_index(4, 64)

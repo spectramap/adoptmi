@@ -63,6 +63,8 @@ raw = full_inf_matrix[:, 3, :,:]
 dia_DPP = 10e-3 #pupil diameter of the DPP
 dia_raman = 9e-3 #pupil diameter of the Raman microscope
 
+phi = generate_phase_from_control_matrix(B, sort_idx)
+
 phi_new = np.zeros((63, 90, 90))
 
 for i in range(63):
