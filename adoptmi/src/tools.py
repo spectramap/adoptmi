@@ -4,15 +4,90 @@ import scipy
 import scipy.linalg as ln 
 from skimage.restoration import unwrap_phase
 
+#def crop a circle region of interest from an image
+def crop_circle(imarray, center, radius):
+    x, y = center
+    crop = np.zeros((2*radius, 2*radius))
+    crop = imarray[x-radius:x+radius, y-radius:y+radius]
+    return crop*ao.create_pupil(2*radius)
+
+def high_pass_filter(imarray, radius):
+    x, y = imarray.shape
+    filter = np.zeros((x, y))
+    for i in range(x):
+        for j in range(y):
+            if np.sqrt((i-x/2)**2 + (j-y/2)**2) > radius:
+                filter[i,j] = 1
+    return filter
+
+def low_pass_filter(imarray, radius):
+    x, y = imarray.shape
+    filter = np.zeros((x, y))
+    for i in range(x):
+        for j in range(y):
+            if np.sqrt((i-x/2)**2 + (j-y/2)**2) < radius:
+                filter[i,j] = 1
+    return filter   
+
+#create a bandwidth filter
+def annular_filter(imarray, inner_radius, outer_radius):
+    x, y = imarray.shape
+    filter = np.zeros((x, y))
+    for i in range(x):
+        for j in range(y):
+            if np.sqrt((i-x/2)**2 + (j-y/2)**2) < outer_radius and np.sqrt((i-x/2)**2 + (j-y/2)**2) > inner_radius:
+                filter[i,j] = 1
+    return filter
+    
+#gaussian filter
+def gaussian(size_mesh, sigma=1):
+    #define beam in the pupil 
+    x = np.linspace(-1,1,size_mesh)
+    y = np.linspace(-1,1,size_mesh)
+    X,Y = np.meshgrid(x,y)
+    R = np.sqrt(X**2+Y**2)
+    return np.exp(-(X**2+Y**2)/sigma**2) #beam profile
+
+#fourier transform of an image
+def ft(image):
+    """
+    Calculate the Fourier transform of an image.
+    Parameters
+    ----------
+    image : 2D array
+        Image.
+    Returns
+    -------
+    image_ft : 2D array
+        Fourier transform of the image.
+    """
+    image_ft = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(image)))
+    return image_ft
+
+#inverse fourier transform of an image
+def ift(image_ft):
+    """
+    Calculate the inverse Fourier transform of an image.
+    Parameters
+    ----------
+    image_ft : 2D array
+        Fourier transform of the image.
+    Returns
+    -------
+    image : 2D array
+        Image.
+    """
+    image = np.fft.fftshift(np.fft.ifft2(np.fft.ifftshift(image_ft)))
+    return image
+
 def bar(x, y, name = 'bar plot', xlabel = 'x', ylabel = 'y'):
     plt.figure(), plt.bar(x, y), plt.title(name), plt.xlabel(xlabel), plt.ylabel(ylabel)    
-    
-def crop_radial_image(phi, D):
-    """narrow the pupil diameter of the DPP to the pupil diameter of the Raman microscope"""
-    phi_new = np.zeros((D, D))
-    phi_new = phi[int((phi.shape[0]-D)/2):int((phi.shape[0]+D)/2), int((phi.shape[1]-D)/2):int((phi.shape[1]+D)/2)]
-    phi_new = phi_new*create_pupil(D, D)
-    return phi_new
+
+def crop_circle(imarray, center, radius):
+    x, y = center
+    crop = np.zeros((2*radius, 2*radius))
+    crop = imarray[x-radius:x+radius, y-radius:y+radius]
+    return crop*create_pupil(2*radius)
 
 # create a pupil function
 def create_pupil(size_mesh):
@@ -337,7 +412,7 @@ def zernike(n, m, r, theta, norm="Noll"):
 def unwrap(phase):
     return unwrap_phase(phase)
     
-def zernike_index(order, size, index="OSA", norm="Noll"):
+def zernike_index(order, size, index="Noll", norm="Noll"):
     """
     Generate a circular limited zernike polynomial.
     Parameters
@@ -360,29 +435,31 @@ def zernike_index(order, size, index="OSA", norm="Noll"):
     else:
         raise ValueError("Indexing must be either OSA or Noll")
     
-    if norm != "Noll":
-        return 0
-    
     #r is a radial matrix
     r = radial_matrix(size)
     angular = angular_matrix(size)
-    #rho = r/r.max()
-    return zernike(n, m, r, angular)
+    zern = zernike(n, m, r, angular)
+    if norm == "Unit":
+        tmp = zern - zern.min()
+        zern = tmp/tmp.max()*2 - 1
+        return zern
+    elif norm == "Noll":
+        return zern
 
-def show(phase):
+def show(beam, cmap="jet", xlabel="x", ylabel="y"):
     plt.figure()
-    if type(phase) == complex:
+    if np.sum(np.imag(beam)) != 0:
         plt.subplot(1, 2, 1)
-        im1 = plt.imshow(phase)
+        im1 = plt.imshow(np.abs(beam), cmap=cmap)
         plt.colorbar(im1)
         plt.subplot(1, 2, 2)
-        im2 = plt.imshow(phase)
+        im2 = plt.imshow(np.angle(beam), cmap=cmap)
         plt.colorbar(im2)
     else:
-        plt.imshow(phase)
+        plt.imshow(beam, cmap=cmap)
         plt.colorbar()
         
-def zernike_decompose(phase, J:list, index="OSA", plot = False, norm = "Noll"):
+def zernike_decompose(phase, J:list, index="Noll", plot = False, norm = "Noll"):
     """
     Decompose an image into zernike coefficients.
     Parameters
@@ -406,8 +483,8 @@ def zernike_decompose(phase, J:list, index="OSA", plot = False, norm = "Noll"):
     
     #phase_zero = phase - 2
     for j in range(len(J)):
-        #G[j,:] = zernike_index(J[j], unwrapped_phi.shape[0], index='OSA')[pupil]
-        G[j,:] = ao.zernike_noll(J[j], phase.shape[0])[pupil]
+        G[j,:] = zernike_index(J[j], unwrapped_phi.shape[0], index='Noll')[pupil]
+        #G[j,:] = ao.zernike_noll(J[j], phase.shape[0])[pupil]
     
     phase_flat = phase[pupil]
     inv = ln.inv(np.dot(G, G.T))
@@ -419,12 +496,10 @@ def zernike_decompose(phase, J:list, index="OSA", plot = False, norm = "Noll"):
         plt.xlabel(index), plt.ylabel(norm)
     return coefficients
 
-def zernike_multi(orders, coefficients, N, index="OSA", norm = "Noll", plot = False):
-    if norm != "Noll":
-        return 0
+def zernike_multi(orders, coefficients, N, index="Noll", norm = "Noll", plot = False):
     out_arr = np.zeros((N, N))
     for count in range(len(orders)):
-        phase = zernike_index(orders[count], N, index)
+        phase = zernike_index(orders[count], N, index, norm)
         out_arr += coefficients[count]*phase
     if plot == True:
         plt.figure(), plt.imshow(out_arr), plt.colorbar()
