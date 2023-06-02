@@ -4,8 +4,12 @@ import scipy
 import scipy.linalg as ln 
 from skimage.restoration import unwrap_phase
 
-def bar(x, y, name = 'bar plot', xlabel = 'x', ylabel = 'y'):
-    plt.figure(), plt.bar(x, y), plt.title(name), plt.xlabel(xlabel), plt.ylabel(ylabel)    
+def wrap(phase):
+    field = np.exp(1j*phase)
+    return np.angle(field)
+
+def bar(x, y, title = 'bar plot', xlabel = 'x', ylabel = 'y'):
+    plt.figure(), plt.bar(x, y), plt.title(title), plt.xlabel(xlabel), plt.ylabel(ylabel)    
     
 def crop_radial_image(phi, D):
     """narrow the pupil diameter of the DPP to the pupil diameter of the Raman microscope"""
@@ -246,12 +250,6 @@ def new_circle(radius, size, circle_centre=(0, 0), origin="middle"):
     # size = 5: coords = [ 0.5  1.5  2.5  3.5  4.5]
     # size = 6: coords = [ 0.5  1.5  2.5  3.5  4.5  5.5]
 
-    # (3.b) Just an internal sanity check:
-    if len(coords) != size:
-        raise exception.Bug("len(coords) = {0}, ".format(len(coords)) +
-                             "size = {0}. They must be equal.".format(size) +
-                             "\n           Debug the line \"coords = ...\".")
-
     # (3.c) Generate the 2-D coordinates of the pixel's centres:
     x, y = np.meshgrid(coords, coords)
 
@@ -359,16 +357,28 @@ def zernike_index(order, size, index="OSA", norm="Noll"):
         n, m = noll2index(order)
     else:
         raise ValueError("Indexing must be either OSA or Noll")
-    
-    if norm != "Noll":
-        return 0
-    
+
     #r is a radial matrix
     r = radial_matrix(size)
     angular = angular_matrix(size)
     #rho = r/r.max()
-    return zernike(n, m, r, angular)
-
+        
+    zern = zernike(n, m, r, angular)
+    if norm == "Noll":
+        return zern
+    
+    elif norm == "unit":
+        tmp = zern
+        tmp = tmp-tmp.min()
+        tmp = tmp/tmp.max()*2-1
+        return tmp
+    
+    elif norm == "rms":
+        pupil = create_pupil(zern.shape[0])
+        # Norm by RMS. Remember only to include circle elements in mean
+        zern[pupil] /= np.sqrt(np.sum(zern[pupil]**2))/len(pupil==True)
+        return zern
+            
 def show(phase):
     plt.figure()
     if type(phase) == complex:
@@ -398,16 +408,14 @@ def zernike_decompose(phase, J:list, index="OSA", plot = False, norm = "Noll"):
     zernike : list
         Zernike coefficients.
     """
-    if norm != "Noll":
-        return 0
+
     pupil = create_pupil(phase.shape[0])
     s = pupil[pupil[:,:] == True].shape[0]    
     G = np.zeros((len(J), s))
     
     #phase_zero = phase - 2
     for j in range(len(J)):
-        #G[j,:] = zernike_index(J[j], unwrapped_phi.shape[0], index='OSA')[pupil]
-        G[j,:] = ao.zernike_noll(J[j], phase.shape[0])[pupil]
+        G[j,:] = zernike_index(J[j], phase.shape[0], index=index, norm=norm)[pupil]
     
     phase_flat = phase[pupil]
     inv = ln.inv(np.dot(G, G.T))
