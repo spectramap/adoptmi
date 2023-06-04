@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
     
 setuptools.setup(
     name="adoptmi",
-    version="0.0.11",
+    version="0.0.12",
     author="Juan David Munoz Bolanos",
     author_email="juan.munoz@student.i-med.ac.at",
     description="A package for microscopy/adaptive optical scientists",
