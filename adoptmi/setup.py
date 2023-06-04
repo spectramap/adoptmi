@@ -1,12 +1,15 @@
 import setuptools 
 
-
+with open("README.md", "r", encoding="utf-8") as fh:
+    long_description = fh.read()
+    
 setuptools.setup(
-    name="adoptme",
-    version="0.0.10",
+    name="adoptmi",
+    version="0.0.11",
     author="Juan David Munoz Bolanos",
     author_email="juan.munoz@student.i-med.ac.at",
     description="A package for microscopy/adaptive optical scientists",
+    long_description=long_description,
     long_description_content_type="text/markdown",
     url="",
     classifiers=[
