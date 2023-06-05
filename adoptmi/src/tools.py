@@ -360,14 +360,25 @@ def zernike_index(order, size, index="OSA", norm="Noll"):
     else:
         raise ValueError("Indexing must be either OSA or Noll")
     
-    if norm != "Noll":
-        return 0
-    
     #r is a radial matrix
     r = radial_matrix(size)
     angular = angular_matrix(size)
     #rho = r/r.max()
-    return zernike(n, m, r, angular)
+    zern = zernike(n, m, r, angular)
+    pupil = create_pupil(size)
+    if norm == "Noll":
+        return zern
+    elif norm == "rms":
+        zern[pupil] /= np.sqrt(np.sum(zern[pupil]**2)/len(zern[pupil]))
+        return zern
+    elif norm == "unit":
+        zern[pupil] -= zern[pupil].min()
+        zern[pupil] /= zern[pupil].max()
+        return zern
+    elif norm == "unit2":
+        zern[pupil] -= zern[pupil].min()
+        zern[pupil] /= zern[pupil].max()*2-1
+        return zern
 
 def show(phase):
     plt.figure()
@@ -420,11 +431,9 @@ def zernike_decompose(phase, J:list, index="OSA", plot = False, norm = "Noll"):
     return coefficients
 
 def zernike_multi(orders, coefficients, N, index="OSA", norm = "Noll", plot = False):
-    if norm != "Noll":
-        return 0
     out_arr = np.zeros((N, N))
     for count in range(len(orders)):
-        phase = zernike_index(orders[count], N, index)
+        phase = zernike_index(orders[count], N, index, norm)
         out_arr += coefficients[count]*phase
     if plot == True:
         plt.figure(), plt.imshow(out_arr), plt.colorbar()
