@@ -438,12 +438,30 @@ def zernike_index(order, size, index="Noll", norm="Noll"):
     #r is a radial matrix
     r = radial_matrix(size)
     angular = angular_matrix(size)
+<<<<<<< HEAD
     zern = zernike(n, m, r, angular)
     if norm == "Unit":
         tmp = zern - zern.min()
         zern = tmp/tmp.max()*2 - 1
         return zern
     elif norm == "Noll":
+=======
+    #rho = r/r.max()
+    zern = zernike(n, m, r, angular)
+    pupil = create_pupil(size)
+    if norm == "Noll":
+        return zern
+    elif norm == "rms":
+        zern[pupil] /= np.sqrt(np.sum(zern[pupil]**2)/len(zern[pupil]))
+        return zern
+    elif norm == "unit":
+        zern[pupil] -= zern[pupil].min()
+        zern[pupil] /= zern[pupil].max()
+        return zern
+    elif norm == "unit2":
+        zern[pupil] -= zern[pupil].min()
+        zern[pupil] /= zern[pupil].max()*2-1
+>>>>>>> ebaa3a867d876c1e8839a7f334504c7836cca969
         return zern
 
 def show(beam, cmap="jet", xlabel="x", ylabel="y"):
@@ -496,7 +514,11 @@ def zernike_decompose(phase, J:list, index="Noll", plot = False, norm = "Noll"):
         plt.xlabel(index), plt.ylabel(norm)
     return coefficients
 
+<<<<<<< HEAD
 def zernike_multi(orders, coefficients, N, index="Noll", norm = "Noll", plot = False):
+=======
+def zernike_multi(orders, coefficients, N, index="OSA", norm = "Noll", plot = False):
+>>>>>>> ebaa3a867d876c1e8839a7f334504c7836cca969
     out_arr = np.zeros((N, N))
     for count in range(len(orders)):
         phase = zernike_index(orders[count], N, index, norm)
