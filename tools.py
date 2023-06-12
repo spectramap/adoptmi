@@ -2,6 +2,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy 
 import scipy.linalg as ln 
+from scipy.optimize import curve_fit
+
 from skimage.restoration import unwrap_phase
 
 def wrap(phase):
@@ -29,8 +31,37 @@ def ift(phi_ft):
     phi = np.fft.fftshift(np.fft.ifft2(np.fft.ifftshift(phi_ft)))
     return phi
 
+def gaussian(size, a=1, x0=0, y0=0, sigma_x=1, sigma_y=1, c=0):
+    x = np.linspace(-1, 1, size)
+    #y = np.linspace(-1, 1, image.shape[0])
+    X, Y = np.meshgrid(x, x)
+    exponent = np.exp(-((X-x0)**2/(2*sigma_x**2) + (Y-y0)**2/(2*sigma_y**2))) + c
+    g = a * exponent/exponent.max()
+    #return g.ravel()
+    return g
+
+
+def gaussian_function(size, a=1, x0=0, y0=0, sigma_x=1, sigma_y=1, c=0):
+    x = np.linspace(0, size, size)
+    #y = np.linspace(-1, 1, image.shape[0])
+    X, Y = np.meshgrid(x, x)
+    exponent = np.exp(-((X-x0)**2/(2*sigma_x**2) + (Y-y0)**2/(2*sigma_y**2))) + c
+    g = a * exponent
+    return g.ravel()
+    #return g
+
+def gaussian_fitting(image, plot = False, initial_guess = None):
+    if initial_guess == None:
+        initial_guess = [255, image.shape[0]/2, image.shape[0]/2, 1, 1, 0]
+    x = np.linspace(-image.shape[0]/2, image.shape[0]/2, image.shape[0])
+    X, Y = np.meshgrid(x, x)
+    popt, pcov = curve_fit(gaussian_function, image.shape[0], image.ravel(), p0=initial_guess)
+    if plot == True:
+        show(gaussian_function(image.shape[0], *popt).reshape(image.shape), 'gaussian fitting')
+    return popt
+
 # create a pupil function
-def create_pupil(size_mesh):
+def create_pupil(size_mesh, centerx=0, centery=0, radius=0):
     """
     Create a pupil function.
     Parameters
@@ -48,10 +79,15 @@ def create_pupil(size_mesh):
     pupil_function : 2D array
         Pupil function.
     """
+    mesh = np.zeros((size_mesh, size_mesh))
+    if radius == 0:
+        radius = size_mesh / 2.
+    mesh = np.zeros((size_mesh, size_mesh))
     x = np.linspace(-size_mesh/2, size_mesh/2, size_mesh)
     y = np.linspace(-size_mesh/2, size_mesh/2, size_mesh)
     kx, ky = np.meshgrid(x, y)
-    return kx**2 + ky**2 < (size_mesh/2)**2
+    mesh[(kx-centerx)**2 + (ky-centery)**2 < radius**2] = 1
+    return mesh
 
 #create a 2d angular matrix
 def angular_matrix(mesh_size):
@@ -461,7 +497,19 @@ def zernike_multi(orders, coefficients, N, index="OSA", norm = "Noll", plot = Fa
 #fourier filters
 
 #create a line in an image given angle and distance from center
-def line(angle, distance, size):
-    x = np.linspace(-1,1,size)
+def line(angle, distance, size, num_lines=1, angular_width = 0):
+    #angle in radians
+    #distance in pixels
+    #size of image
+    #num_lines is the number of lines to create
+    #angular_width is the angular width of the line
+    #convert degrees to radians
+    angle = angle*np.pi/180
+    angular_width = angular_width*np.pi/180
+
+    x = np.linspace(-size/2,size/2,size)
     X,Y = np.meshgrid(x,x)
-    return np.abs(X*np.cos(angle) + Y*np.sin(angle)) < distance
+    tmp = np.zeros((size,size))
+    for i in range(num_lines):
+        tmp+=np.abs(X*np.cos(angle+angular_width/num_lines*i) + Y*np.sin(angle+angular_width/num_lines*i)) < distance
+    return tmp == 0
