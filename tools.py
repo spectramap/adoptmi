@@ -2,36 +2,66 @@ import numpy as np
 import matplotlib.pyplot as plt
 import scipy 
 import scipy.linalg as ln 
-from skimage.restoration import unwrap_phase
 from scipy.optimize import curve_fit
 
-def bar(x, y, name = 'bar plot', xlabel = 'x', ylabel = 'y'):
-    plt.figure(), plt.bar(x, y), plt.title(name), plt.xlabel(xlabel), plt.ylabel(ylabel)    
+from skimage.restoration import unwrap_phase
+
+def wrap(phase):
+    field = np.exp(1j*phase)
+    return np.angle(field)
+
+def bar(x, y, title = 'bar plot', xlabel = 'x', ylabel = 'y'):
+    plt.figure(), plt.bar(x, y), plt.title(title), plt.xlabel(xlabel), plt.ylabel(ylabel)    
     
-def crop_radial_image(phi, r, x0=0, y0=0):
+def crop_radial_image(phi, radios, offsetx=0, offsety=0):
     """narrow the pupil diameter of the DPP to the pupil diameter of the Raman microscope"""
-    phi_new = np.zeros((2*r, 2*r))
-    phi_new = phi[int((phi.shape[0]-2*r)/2)-x0:int((phi.shape[0]+2*r)/2)-x0, int((phi.shape[1]-2*r)/2)-y0:int((phi.shape[1]+2*r)/2)-y0].copy()
-    phi_new = phi_new*create_pupil(2*r)
+    phi_new = np.zeros((2*radios, 2*radios))
+    phi_new = phi[offsetx:int(2*radios+offsetx), offsety:int(2*radios+offsety)].copy()
+    phi_new = phi_new*create_pupil(2*radios)
     return phi_new
 
-def gaussian(xy, a, x0=0, y0=0, sigma_x=1, sigma_y=1, c=0):
-    x, y = xy
-    g = a * np.exp(-((x-x0)**2/(2*sigma_x**2) + (y-y0)**2/(2*sigma_y**2))) + c
+#fourier transform
+def ft(phi):
+    """fourier transform"""
+    phi_ft = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(phi)))
+    return phi_ft
+
+def ift(phi_ft):
+    """inverse fourier transform"""
+    phi = np.fft.fftshift(np.fft.ifft2(np.fft.ifftshift(phi_ft)))
+    return phi
+
+def gaussian(size, a=1, x0=0, y0=0, sigma_x=1, sigma_y=1, c=0):
+    x = np.linspace(-1, 1, size)
+    #y = np.linspace(-1, 1, image.shape[0])
+    X, Y = np.meshgrid(x, x)
+    exponent = np.exp(-((X-x0)**2/(2*sigma_x**2) + (Y-y0)**2/(2*sigma_y**2))) + c
+    g = a * exponent/exponent.max()
     #return g.ravel()
     return g
 
-def gaussian_fitting(image, plot = False):
-    initial_guess = [255, image.shape[0]/2, image.shape[0]/2, 10, 10, 0]
-    x = np.linspace(0, image.shape[0], image.shape[0])
-    y = np.linspace(0, image.shape[0], image.shape[0])
-    X, Y = np.meshgrid(x, y)
-    popt, pcov = curve_fit(gaussian.ravel(), (X, Y), image.ravel(), p0=initial_guess)
+
+def gaussian_function(size, a=1, x0=0, y0=0, sigma_x=1, sigma_y=1, c=0):
+    x = np.linspace(0, size, size)
+    #y = np.linspace(-1, 1, image.shape[0])
+    X, Y = np.meshgrid(x, x)
+    exponent = np.exp(-((X-x0)**2/(2*sigma_x**2) + (Y-y0)**2/(2*sigma_y**2))) + c
+    g = a * exponent
+    return g.ravel()
+    #return g
+
+def gaussian_fitting(image, plot = False, initial_guess = None):
+    if initial_guess == None:
+        initial_guess = [255, image.shape[0]/2, image.shape[0]/2, 1, 1, 0]
+    x = np.linspace(-image.shape[0]/2, image.shape[0]/2, image.shape[0])
+    X, Y = np.meshgrid(x, x)
+    popt, pcov = curve_fit(gaussian_function, image.shape[0], image.ravel(), p0=initial_guess)
     if plot == True:
-        show(gaussian((X, Y), *popt).reshape(image.shape), 'gaussian fitting')
-    return gaussian((X, Y), *popt).reshape(image.shape)
+        show(gaussian_function(image.shape[0], *popt).reshape(image.shape), 'gaussian fitting')
+    return popt
+
 # create a pupil function
-def create_pupil(size_mesh):
+def create_pupil(size_mesh, centerx=0, centery=0, radius=0):
     """
     Create a pupil function.
     Parameters
@@ -49,10 +79,15 @@ def create_pupil(size_mesh):
     pupil_function : 2D array
         Pupil function.
     """
+    mesh = np.zeros((size_mesh, size_mesh))
+    if radius == 0:
+        radius = size_mesh / 2.
+    mesh = np.zeros((size_mesh, size_mesh))
     x = np.linspace(-size_mesh/2, size_mesh/2, size_mesh)
     y = np.linspace(-size_mesh/2, size_mesh/2, size_mesh)
     kx, ky = np.meshgrid(x, y)
-    return kx**2 + ky**2 < (size_mesh/2)**2
+    mesh[(kx-centerx)**2 + (ky-centery)**2 < radius**2] = 1
+    return mesh
 
 #create a 2d angular matrix
 def angular_matrix(mesh_size):
@@ -262,12 +297,6 @@ def new_circle(radius, size, circle_centre=(0, 0), origin="middle"):
     # size = 5: coords = [ 0.5  1.5  2.5  3.5  4.5]
     # size = 6: coords = [ 0.5  1.5  2.5  3.5  4.5  5.5]
 
-    # (3.b) Just an internal sanity check:
-    if len(coords) != size:
-        raise exception.Bug("len(coords) = {0}, ".format(len(coords)) +
-                             "size = {0}. They must be equal.".format(size) +
-                             "\n           Debug the line \"coords = ...\".")
-
     # (3.c) Generate the 2-D coordinates of the pixel's centres:
     x, y = np.meshgrid(coords, coords)
 
@@ -375,7 +404,7 @@ def zernike_index(order, size, index="OSA", norm="Noll"):
         n, m = noll2index(order)
     else:
         raise ValueError("Indexing must be either OSA or Noll")
-    
+
     #r is a radial matrix
     r = radial_matrix(size)
     angular = angular_matrix(size)
@@ -396,19 +425,31 @@ def zernike_index(order, size, index="OSA", norm="Noll"):
         zern[pupil] /= zern[pupil].max()*2-1
         return zern
 
-def show(phase, title="phase", xlabel="x", ylabel="y", cmap="jet"):
-    plt.figure()
-    if type(phase) == complex:
-        plt.subplot(1, 2, 1)
-        im1 = plt.imshow(phase)
-        plt.colorbar(im1)
-        plt.subplot(1, 2, 2)
-        im2 = plt.imshow(phase)
-        plt.colorbar(im2)
+def show(phase, ybarlabel="Intensity", cmap="jet", xlabel="x", ylabel="y", title="Phase", path=None):
+    if np.iscomplexobj(phase):
+        fig, ax = plt.subplots(1, 2)
+        im1 = ax[0].imshow(np.abs(phase), cmap=cmap)
+        ax[0].set_xlabel(xlabel)
+        ax[0].set_ylabel(ylabel)
+        ax[0].set_title("Amplitude")
+        c1bar = fig.colorbar(im1, location="bottom")
+        c1bar.set_label("Intensity")
+        im2 = ax[1].imshow(np.angle(phase), cmap=cmap)
+        ax[1].set_xlabel(xlabel)
+        ax[1].set_ylabel(ylabel)
+        ax[1].set_title("Phase")
+        c2bar = fig.colorbar(im2, location="bottom")
+        c2bar.set_label("Phase [rad]")
     else:
-        plt.imshow(phase, cmap=cmap), plt.title(title), plt.xlabel(xlabel), plt.ylabel(ylabel)
-        plt.colorbar()
-        
+        fig, ax = plt.subplots()
+        im = ax.imshow(phase, cmap = cmap)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        cbar = fig.colorbar(im)
+        cbar.set_label(ybarlabel)
+    if path != None:
+        fig.savefig(path+"/"+title+".png", dpi=300)
+            
 def zernike_decompose(phase, J:list, index="OSA", plot = False, norm = "Noll"):
     """
     Decompose an image into zernike coefficients.
@@ -425,16 +466,14 @@ def zernike_decompose(phase, J:list, index="OSA", plot = False, norm = "Noll"):
     zernike : list
         Zernike coefficients.
     """
-    if norm != "Noll":
-        return 0
+
     pupil = create_pupil(phase.shape[0])
     s = pupil[pupil[:,:] == True].shape[0]    
     G = np.zeros((len(J), s))
     
     #phase_zero = phase - 2
     for j in range(len(J)):
-        #G[j,:] = zernike_index(J[j], unwrapped_phi.shape[0], index='OSA')[pupil]
-        G[j,:] = ao.zernike_noll(J[j], phase.shape[0])[pupil]
+        G[j,:] = zernike_index(J[j], phase.shape[0], index=index, norm=norm)[pupil]
     
     phase_flat = phase[pupil]
     inv = ln.inv(np.dot(G, G.T))
@@ -458,7 +497,19 @@ def zernike_multi(orders, coefficients, N, index="OSA", norm = "Noll", plot = Fa
 #fourier filters
 
 #create a line in an image given angle and distance from center
-def line(angle, distance, size):
-    x = np.linspace(-1,1,size)
+def line(angle, distance, size, num_lines=1, angular_width = 0):
+    #angle in radians
+    #distance in pixels
+    #size of image
+    #num_lines is the number of lines to create
+    #angular_width is the angular width of the line
+    #convert degrees to radians
+    angle = angle*np.pi/180
+    angular_width = angular_width*np.pi/180
+
+    x = np.linspace(-size/2,size/2,size)
     X,Y = np.meshgrid(x,x)
-    return np.abs(X*np.cos(angle) + Y*np.sin(angle)) < distance
+    tmp = np.zeros((size,size))
+    for i in range(num_lines):
+        tmp+=np.abs(X*np.cos(angle+angular_width/num_lines*i) + Y*np.sin(angle+angular_width/num_lines*i)) < distance
+    return tmp == 0
