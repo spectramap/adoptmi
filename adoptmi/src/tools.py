@@ -11,12 +11,23 @@ def wrap(phase):
 def bar(x, y, title = 'bar plot', xlabel = 'x', ylabel = 'y'):
     plt.figure(), plt.bar(x, y), plt.title(title), plt.xlabel(xlabel), plt.ylabel(ylabel)    
     
-def crop_radial_image(phi, D):
+def crop_radial_image(phi, radios, offsetx=0, offsety=0):
     """narrow the pupil diameter of the DPP to the pupil diameter of the Raman microscope"""
-    phi_new = np.zeros((D, D))
-    phi_new = phi[int((phi.shape[0]-D)/2):int((phi.shape[0]+D)/2), int((phi.shape[1]-D)/2):int((phi.shape[1]+D)/2)]
-    phi_new = phi_new*create_pupil(D, D)
+    phi_new = np.zeros((2*radios, 2*radios))
+    phi_new = phi[offsetx:int(2*radios+offsetx), offsety:int(2*radios+offsety)].copy()
+    phi_new = phi_new*create_pupil(2*radios)
     return phi_new
+
+#fourier transform
+def ft(phi):
+    """fourier transform"""
+    phi_ft = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(phi)))
+    return phi_ft
+
+def ift(phi_ft):
+    """inverse fourier transform"""
+    phi = np.fft.fftshift(np.fft.ifft2(np.fft.ifftshift(phi_ft)))
+    return phi
 
 # create a pupil function
 def create_pupil(size_mesh):
@@ -362,36 +373,47 @@ def zernike_index(order, size, index="OSA", norm="Noll"):
     r = radial_matrix(size)
     angular = angular_matrix(size)
     #rho = r/r.max()
-        
     zern = zernike(n, m, r, angular)
+    pupil = create_pupil(size)
     if norm == "Noll":
         return zern
-    
-    elif norm == "unit":
-        tmp = zern
-        tmp = tmp-tmp.min()
-        tmp = tmp/tmp.max()*2-1
-        return tmp
-    
     elif norm == "rms":
-        pupil = create_pupil(zern.shape[0])
-        # Norm by RMS. Remember only to include circle elements in mean
-        zern[pupil] /= np.sqrt(np.sum(zern[pupil]**2))/len(pupil==True)
+        zern[pupil] /= np.sqrt(np.sum(zern[pupil]**2)/len(zern[pupil]))
         return zern
-            
-def show(phase):
-    plt.figure()
-    if type(phase) == complex:
-        plt.subplot(1, 2, 1)
-        im1 = plt.imshow(phase)
-        plt.colorbar(im1)
-        plt.subplot(1, 2, 2)
-        im2 = plt.imshow(phase)
-        plt.colorbar(im2)
+    elif norm == "unit":
+        zern[pupil] -= zern[pupil].min()
+        zern[pupil] /= zern[pupil].max()
+        return zern
+    elif norm == "unit2":
+        zern[pupil] -= zern[pupil].min()
+        zern[pupil] /= zern[pupil].max()*2-1
+        return zern
+
+def show(phase, ybarlabel="Intensity", cmap="jet", xlabel="x", ylabel="y", title="Phase", path=None):
+    if np.iscomplexobj(phase):
+        fig, ax = plt.subplots(1, 2)
+        im1 = ax[0].imshow(np.abs(phase), cmap=cmap)
+        ax[0].set_xlabel(xlabel)
+        ax[0].set_ylabel(ylabel)
+        ax[0].set_title("Amplitude")
+        c1bar = fig.colorbar(im1, location="bottom")
+        c1bar.set_label("Intensity")
+        im2 = ax[1].imshow(np.angle(phase), cmap=cmap)
+        ax[1].set_xlabel(xlabel)
+        ax[1].set_ylabel(ylabel)
+        ax[1].set_title("Phase")
+        c2bar = fig.colorbar(im2, location="bottom")
+        c2bar.set_label("Phase [rad]")
     else:
-        plt.imshow(phase)
-        plt.colorbar()
-        
+        fig, ax = plt.subplots()
+        im = ax.imshow(phase, cmap = cmap)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(ylabel)
+        cbar = fig.colorbar(im)
+        cbar.set_label(ybarlabel)
+    if path != None:
+        fig.savefig(path+"/"+title+".png", dpi=300)
+            
 def zernike_decompose(phase, J:list, index="OSA", plot = False, norm = "Noll"):
     """
     Decompose an image into zernike coefficients.
@@ -428,11 +450,9 @@ def zernike_decompose(phase, J:list, index="OSA", plot = False, norm = "Noll"):
     return coefficients
 
 def zernike_multi(orders, coefficients, N, index="OSA", norm = "Noll", plot = False):
-    if norm != "Noll":
-        return 0
     out_arr = np.zeros((N, N))
     for count in range(len(orders)):
-        phase = zernike_index(orders[count], N, index)
+        phase = zernike_index(orders[count], N, index, norm)
         out_arr += coefficients[count]*phase
     if plot == True:
         plt.figure(), plt.imshow(out_arr), plt.colorbar()
