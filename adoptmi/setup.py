@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
     
 setuptools.setup(
     name="adoptmi",
-    version="0.0.13",
+    version="0.0.14",
     author="Juan David Munoz Bolanos",
     author_email="juan.munoz@student.i-med.ac.at",
     description="A package for microscopy/adaptive optical scientists",
@@ -15,8 +15,6 @@ setuptools.setup(
     classifiers=[
         "Programming Language :: Python :: 3",
     ],
-    package_dir={"": "src"},
-    py_modules=["optics", "tools", "api"],
     install_requires=["scikit-learn", "scipy", "scikit-image", "matplotlib"],
     packages=setuptools.find_namespace_packages(where='src'),
     python_requires=">=3.8",
