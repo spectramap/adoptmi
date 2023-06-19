@@ -6,18 +6,86 @@ from scipy.optimize import curve_fit
 
 from skimage.restoration import unwrap_phase
 
+
+def high_pass_filter(image, radius, plot = False):
+    """high pass filter"""
+    image_ft = ft(image)
+    image_ft = image_ft*create_pupil(image.shape[0], radius = radius)
+    image = ift(image_ft)
+    if plot == True:
+        show(image, 'high pass filter')
+    return image
+
+def low_pass_filter(image, radius, plot = False):
+    """low pass filter"""
+    image_ft = ft(image)
+    image_ft = image_ft*(1-create_pupil(image.shape[0], radius = radius))
+    image = ift(image_ft)
+    if plot == True:
+        show(image, 'low pass filter')
+    return image
+
+def band_pass_filter(image, radius1, radius2, plot = False):
+    """band pass filter"""
+    image_ft = ft(image)
+    image_ft = image_ft*(create_pupil(image.shape[0], radius = radius2)*create_pupil(image.shape[0], radius = radius1))
+    image = ift(image_ft)
+    if plot == True:
+        show(image, 'band pass filter')
+    return image
+
+
+
+def gaussian1d_fitting(x, y, plot = False, initial_guess = None):
+    if initial_guess == None:
+        initial_guess = [1, 0, 1, 0]
+
+    popt, pcov = curve_fit(gaussian1d, x, y, p0=initial_guess)
+
+    # Calculate the FWHM
+    fwhm = 2 * np.sqrt(2 * np.log(2)) * popt[2]
+    if plot:
+        fig, ax = plt.subplots()
+        ax.plot(x, y, 'k.', label='Data')
+        ax.plot(x, gaussian(x, *popt), 'r-', label='Fit')
+        ax.axhline(popt[3] + popt[0]/2, color='gray', linestyle='--')
+        ax.axvline(popt[1] - fwhm/2, color='gray', linestyle='--')
+        ax.axvline(popt[1] + fwhm/2, color='gray', linestyle='--')
+        ax.text(popt[1] - fwhm/2, popt[3] + popt[0]/2, f'FWHM = {fwhm:.2f}', ha='right', va='bottom')
+        ax.legend()
+        plt.show()
+    return popt
+
+# Define the 1D Gaussian function
+def gaussian1d(x, a, x0, sigma, c):
+    g = a * np.exp(-(x-x0)**2/(2*sigma**2)) + c
+    return g
+
+
+def remove_mean(phase):
+    tmp = phase.copy()
+    pupil = create_pupil(phase.shape[0])
+    tmp -= np.mean(tmp[pupil==True])
+    return tmp * pupil
+
+def remove_zernikes(phase, z , coeff, norm = "Noll", index = "Noll"):
+    tmp = phase.copy()
+    for i in range(len(coeff)):
+        tmp-= coeff[i]*zernike_index(z[i], size = phase.shape[0], index = index, norm = norm)
+    return tmp*create_pupil(phase.shape[0])
+
 def wrap(phase):
     field = np.exp(1j*phase)
     return np.angle(field)
 
-def bar(x, y, title = 'bar plot', xlabel = 'x', ylabel = 'y'):
-    plt.figure(), plt.bar(x, y), plt.title(title), plt.xlabel(xlabel), plt.ylabel(ylabel)    
+def bar(x, y, title = 'bar plot', xlabel = 'x', ylabel = 'y', path = None):
+    plt.figure(), plt.bar(x, y, tick_label = x, align="center", color = "r"), plt.title(title), plt.xlabel(xlabel), plt.ylabel(ylabel)    
     
-def crop_radial_image(phi, radios, offsetx=0, offsety=0):
+def crop_radial_image(phi, radios, posx, posy):
     """narrow the pupil diameter of the DPP to the pupil diameter of the Raman microscope"""
     phi_new = np.zeros((2*radios, 2*radios))
-    phi_new = phi[offsetx:int(2*radios+offsetx), offsety:int(2*radios+offsety)].copy()
-    phi_new = phi_new*create_pupil(2*radios)
+    phi_new = phi[posx-radios:radios+posx, posy-radios:radios+posy].copy()
+    phi_new = phi_new*create_pupil(phi_new.shape[0])
     return phi_new
 
 #fourier transform
@@ -414,16 +482,20 @@ def zernike_index(order, size, index="OSA", norm="Noll"):
     if norm == "Noll":
         return zern
     elif norm == "rms":
-        zern[pupil] /= np.sqrt(np.sum(zern[pupil]**2)/len(zern[pupil]))
-        return zern
+        zern = zern/np.sqrt(np.sum(zern[pupil==True]**2)/len(zern[pupil==True]))
+        return zern*pupil
     elif norm == "unit":
-        zern[pupil] -= zern[pupil].min()
-        zern[pupil] /= zern[pupil].max()
-        return zern
+        zern -= zern.min()
+        zern = zern/zern.max()
+        return zern*pupil
     elif norm == "unit2":
-        zern[pupil] -= zern[pupil].min()
-        zern[pupil] /= zern[pupil].max()*2-1
-        return zern
+        zern -= zern.min()
+        zern = zern/zern.max()*2-1
+        return zern*pupil
+    elif norm == "pitopi":
+        zern -= zern.min()
+        zern = zern/zern.max()*2-1
+        return zern*pupil*np.pi
 
 def show(phase, ybarlabel="Intensity", cmap="jet", xlabel="x", ylabel="y", title="Phase", path=None):
     if np.iscomplexobj(phase):
@@ -445,12 +517,13 @@ def show(phase, ybarlabel="Intensity", cmap="jet", xlabel="x", ylabel="y", title
         im = ax.imshow(phase, cmap = cmap)
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
+        ax.set_title(title)
         cbar = fig.colorbar(im)
         cbar.set_label(ybarlabel)
     if path != None:
         fig.savefig(path+"/"+title+".png", dpi=300)
             
-def zernike_decompose(phase, J:list, index="OSA", plot = False, norm = "Noll"):
+def zernike_decompose(phase, J:list, index="OSA", plot = False, norm = "Noll", factor = 1, ylabel = "Phase [rad]", path = None):
     """
     Decompose an image into zernike coefficients.
     Parameters
@@ -473,16 +546,15 @@ def zernike_decompose(phase, J:list, index="OSA", plot = False, norm = "Noll"):
     
     #phase_zero = phase - 2
     for j in range(len(J)):
-        G[j,:] = zernike_index(J[j], phase.shape[0], index=index, norm=norm)[pupil]
+        G[j,:] = zernike_index(J[j], phase.shape[0], index=index, norm=norm)[pupil==True]
     
-    phase_flat = phase[pupil]
+    phase_flat = phase[pupil==True]
     inv = ln.inv(np.dot(G, G.T))
     coeff = np.dot(inv, G)
     coefficients = np.dot(coeff, phase_flat)
 
     if plot == True:
-        plt.figure(), plt.bar(J, coefficients, width=0.8)
-        plt.xlabel(index), plt.ylabel(norm)
+        bar(J, coefficients*factor, title="Zernike Coefficients", xlabel="Zernike Coefficient ("+index+")", ylabel= ylabel+"("+norm+")", path=None)
     return coefficients
 
 def zernike_multi(orders, coefficients, N, index="OSA", norm = "Noll", plot = False):
