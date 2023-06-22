@@ -3,9 +3,8 @@ import matplotlib.pyplot as plt
 import scipy 
 import scipy.linalg as ln 
 from scipy.optimize import curve_fit
-
+from matplotlib.patches import Circle
 from skimage.restoration import unwrap_phase
-
 
 def high_pass_filter(image, radius, plot = False):
     """high pass filter"""
@@ -81,29 +80,41 @@ def wrap(phase):
 def bar(x, y, title = 'bar plot', xlabel = 'x', ylabel = 'y', path = None):
     plt.figure(), plt.bar(x, y, tick_label = x, align="center", color = "r"), plt.title(title), plt.xlabel(xlabel), plt.ylabel(ylabel)    
     
-def crop_radial_image(phi, radios, posx, posy):
+def crop_radial_image(phi, radios, posx, posy, plot = False, draw = False):
     """narrow the pupil diameter of the DPP to the pupil diameter of the Raman microscope"""
     phi_new = np.zeros((2*radios, 2*radios))
     phi_new = phi[posx-radios:radios+posx, posy-radios:radios+posy].copy()
     phi_new = phi_new*create_pupil(phi_new.shape[0])
+    if plot == True:
+        show(phi_new, title= 'cropped image')
+    if draw == True:
+        show(phi, title = 'Boundary')
+        circle = Circle((posy, posx), radios, fill=False, edgecolor='red', linewidth=1)
+        plt.gca().add_patch(circle)
     return phi_new
 
 #fourier transform
-def ft(phi):
+def ft(phi, plot = False, title = 'fourier transform'):
     """fourier transform"""
     phi_ft = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(phi)))
+    if plot == True:
+        show(np.log(phi_ft), title)
     return phi_ft
 
-def ift(phi_ft):
+def ift(phi_ft, plot = False, title = 'inverse fourier transform'):
     """inverse fourier transform"""
     phi = np.fft.fftshift(np.fft.ifft2(np.fft.ifftshift(phi_ft)))
+    if plot == True:
+        show(phi, title)
     return phi
 
 def gaussian(size, a=1, x0=0, y0=0, sigma_x=1, sigma_y=1, c=0):
     x = np.linspace(-1, 1, size)
     #y = np.linspace(-1, 1, image.shape[0])
     X, Y = np.meshgrid(x, x)
-    exponent = np.exp(-((X-x0)**2/(2*sigma_x**2) + (Y-y0)**2/(2*sigma_y**2))) + c
+    x0_ = x0/size
+    y0_ = y0/size
+    exponent = np.exp(-((X-x0_)**2/(2*sigma_x**2) + (Y-y0_)**2/(2*sigma_y**2))) + c
     g = a * exponent/exponent.max()
     #return g.ravel()
     return g
@@ -518,8 +529,11 @@ def show(phase, ybarlabel="Intensity", cmap="jet", xlabel="x", ylabel="y", title
         ax.set_xlabel(xlabel)
         ax.set_ylabel(ylabel)
         ax.set_title(title)
-        cbar = fig.colorbar(im)
+        cbar = fig.colorbar(im, location="bottom", )
         cbar.set_label(ybarlabel)
+        #cbar.ax.set_adjustable("box")
+        #cbar.ax.set_anchor("C")
+        # Adjust the position and size of the color bar
     if path != None:
         fig.savefig(path+"/"+title+".png", dpi=300)
             
